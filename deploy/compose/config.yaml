@@ -1,0 +1,23 @@
+listen:
+  grpc: :9000
+  admin: :8080
+cache_dir: /tmp/geoip-cache
+ip_sources:
+  - header: x-real-ip
+  - header: x-forwarded-for
+  - envoy: source_address
+databases:
+  city:
+    source: http://dbserver/GeoIP2-City-Test.mmdb
+    check_interval: 1m
+    required: true
+  asn:
+    source: http://dbserver/GeoLite2-ASN-Test.mmdb
+    check_interval: 1m
+headers:
+  x-geoip-country-code: {db: city, path: country.iso_code}
+  x-geoip-city:         {db: city, path: city.names.en}
+  x-geoip-timezone:     {db: city, path: location.time_zone}
+  x-geoip-latitude:     {db: city, path: location.latitude}
+  x-geoip-asn:          {db: asn, path: autonomous_system_number}
+  x-geoip-org:          {db: asn, path: autonomous_system_organization}

@@ -1,0 +1,20 @@
+services:
+  dbserver:
+    image: nginx:alpine
+    volumes:
+      - ../../testdata:/usr/share/nginx/html:ro
+  geoip:
+    build: ../..
+    command: ["-config", "/etc/geoip/config.yaml"]
+    volumes:
+      - ./config.yaml:/etc/geoip/config.yaml:ro
+    depends_on: [dbserver]
+  echo:
+    image: mendhak/http-https-echo:37
+  envoy:
+    image: envoyproxy/envoy:v1.33-latest
+    command: ["-c", "/etc/envoy/envoy.yaml"]
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports: ["10000:10000"]
+    depends_on: [geoip, echo]
