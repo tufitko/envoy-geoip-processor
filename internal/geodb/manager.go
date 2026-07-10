@@ -96,7 +96,10 @@ func (m *Manager) LoadCache() {
 		s.reader.Store(r)
 		m.loadedAt.WithLabelValues(name).SetToCurrentTime()
 		if raw, err := os.ReadFile(m.metaPath(name)); err == nil {
-			json.Unmarshal(raw, &s.meta)
+			if err := json.Unmarshal(raw, &s.meta); err != nil {
+				// Corrupt meta only costs one unconditional re-download.
+				m.logger.Warn("ignoring corrupt meta file", "db", name, "err", err)
+			}
 		}
 		m.logger.Info("loaded database from cache", "db", name)
 	}
@@ -165,7 +168,11 @@ func (m *Manager) checkOne(ctx context.Context, s *dbState) {
 	}
 	s.meta = next
 	if raw, err := json.Marshal(next); err == nil {
-		os.WriteFile(m.metaPath(s.name), raw, 0o644)
+		if err := os.WriteFile(m.metaPath(s.name), raw, 0o644); err != nil {
+			// Non-fatal: the swap still happens, only conditional requests
+			// after a restart lose their baseline.
+			m.logger.Warn("failed to persist meta file", "db", s.name, "err", err)
+		}
 	}
 	if old := s.reader.Swap(r); old != nil {
 		time.AfterFunc(closeGrace, func() { old.Close() })

@@ -101,7 +101,9 @@ func run(configPath string, logger *slog.Logger) error {
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	adminSrv.Shutdown(shutdownCtx)
+	if err := adminSrv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("admin server shutdown failed", "err", err)
+	}
 	grpcSrv.GracefulStop()
 	return nil
 }
