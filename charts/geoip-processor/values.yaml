@@ -1,0 +1,38 @@
+image:
+  repository: geoip-processor
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 2
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {memory: 512Mi}
+
+# Env для кредов (например MAXMIND_LICENSE из секрета)
+env: []
+#  - name: MAXMIND_LICENSE
+#    valueFrom: {secretKeyRef: {name: maxmind, key: license}}
+
+# Контент /etc/geoip/config.yaml (см. examples/config.yaml в репо)
+config:
+  listen: {grpc: ":9000", admin: ":8080"}
+  cache_dir: /var/cache/geoip
+  ip_sources:
+    - header: x-real-ip
+    - header: x-forwarded-for
+    - envoy: source_address
+  databases: {}
+  headers: {}
+
+envoyExtensionPolicy:
+  enabled: false
+  # targetRef целится в Gateway, к которому цепляем процессор
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: my-gateway
+  failOpen: true
+  messageTimeout: 200ms
+  # Требует Envoy Gateway >= v1.3 (передача атрибутов в ext_proc).
+  requestAttributes: [source.address]

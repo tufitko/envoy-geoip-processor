@@ -1,0 +1,6 @@
+apiVersion: v2
+name: geoip-processor
+description: Envoy ext_proc service that enriches requests with MaxMind geoip headers
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

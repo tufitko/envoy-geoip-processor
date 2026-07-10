@@ -1,0 +1,22 @@
+{{- if .Values.envoyExtensionPolicy.enabled }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: {{ include "geoip.name" . }}
+spec:
+  targetRefs:
+  - group: {{ .Values.envoyExtensionPolicy.targetRef.group }}
+    kind: {{ .Values.envoyExtensionPolicy.targetRef.kind }}
+    name: {{ .Values.envoyExtensionPolicy.targetRef.name }}
+  extProc:
+  - backendRefs:
+    - name: {{ include "geoip.name" . }}
+      port: 9000
+    failOpen: {{ .Values.envoyExtensionPolicy.failOpen }}
+    messageTimeout: {{ .Values.envoyExtensionPolicy.messageTimeout }}
+    processingMode:
+      request:
+        {{- with .Values.envoyExtensionPolicy.requestAttributes }}
+        attributes: {{ toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

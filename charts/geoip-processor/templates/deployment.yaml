@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "geoip.name" . }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {app: {{ include "geoip.name" . }}}
+  template:
+    metadata:
+      labels: {app: {{ include "geoip.name" . }}}
+      annotations:
+        checksum/config: {{ toYaml .Values.config | sha256sum }}
+    spec:
+      containers:
+      - name: geoip-processor
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args: ["-config", "/etc/geoip/config.yaml"]
+        ports:
+        - {name: grpc, containerPort: 9000}
+        - {name: admin, containerPort: 8080}
+        env: {{ toYaml .Values.env | nindent 10 }}
+        readinessProbe:
+          httpGet: {path: /readyz, port: admin}
+        livenessProbe:
+          httpGet: {path: /healthz, port: admin}
+        resources: {{ toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - {name: config, mountPath: /etc/geoip, readOnly: true}
+        - {name: cache, mountPath: /var/cache/geoip}
+      volumes:
+      - name: config
+        configMap: {name: {{ include "geoip.name" . }}}
+      - name: cache
+        emptyDir: {}
