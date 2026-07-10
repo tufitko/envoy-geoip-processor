@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 )
 
@@ -110,5 +111,31 @@ func TestHTTPFetcherErrors(t *testing.T) {
 	defer srv2.Close()
 	if _, _, err := (&HTTPFetcher{URL: srv2.URL}).Fetch(context.Background(), filepath.Join(t.TempDir(), "x"), Meta{}); err == nil {
 		t.Error("expected error when archive has no .mmdb")
+	}
+}
+
+func TestHTTPFetcherRetriesTransientErrors(t *testing.T) {
+	db := mmdbBytes(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		w.Write(db)
+	}))
+	defer srv.Close()
+
+	dst := filepath.Join(t.TempDir(), "city.mmdb")
+	// nil Client falls back to the package default, which must retry 5xx.
+	changed, _, err := (&HTTPFetcher{URL: srv.URL}).Fetch(context.Background(), dst, Meta{})
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v, want success after retry", changed, err)
+	}
+	if got := calls.Load(); got < 2 {
+		t.Errorf("expected at least 2 attempts, got %d", got)
+	}
+	if got, _ := os.ReadFile(dst); !bytes.Equal(got, db) {
+		t.Error("downloaded file differs")
 	}
 }

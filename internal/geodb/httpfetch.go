@@ -6,7 +6,23 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
+
+// defaultClient retries transient failures (network errors, 5xx) with
+// backoff, so a briefly unavailable origin at startup doesn't leave a
+// database missing until the next check_interval. Each attempt still
+// honors the context deadline set by the manager.
+var defaultClient = func() *http.Client {
+	rc := retryablehttp.NewClient()
+	rc.RetryMax = 3
+	rc.RetryWaitMin = time.Second
+	rc.RetryWaitMax = 10 * time.Second
+	rc.Logger = nil
+	return rc.StandardClient()
+}()
 
 // HTTPFetcher downloads a database over HTTP(S) using conditional requests.
 type HTTPFetcher struct {
@@ -35,7 +51,7 @@ func (h *HTTPFetcher) Fetch(ctx context.Context, dst string, prev Meta) (bool, M
 	}
 	client := h.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = defaultClient
 	}
 	resp, err := client.Do(req)
 	if err != nil {

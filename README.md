@@ -13,7 +13,9 @@ auto-downloaded and auto-refreshed databases and a configurable header mapping.
   `s3://bucket/key` and re-checked on its own `check_interval`. HTTP downloads use conditional
   requests (`If-None-Match` / `If-Modified-Since`); S3 downloads compare the object's `ETag` via
   `HeadObject` first. A `tar.gz` payload (as served by MaxMind's download API) is detected by its
-  gzip magic bytes and the first `*.mmdb` member inside is extracted automatically.
+  gzip magic bytes and the first `*.mmdb` member inside is extracted automatically. Transient HTTP
+  failures (network errors, 5xx) are retried up to 3 times with backoff, so a briefly unavailable
+  origin at startup doesn't delay the first load until the next `check_interval`.
 - **Zero-downtime reload** — a new database is swapped in atomically (`atomic.Pointer`); the
   previous reader is kept open for one more minute so in-flight lookups never see a closed file.
 - **Arbitrary header mapping** — each output header is declared as `{db, path, default}`; `path` is
