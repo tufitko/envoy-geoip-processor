@@ -75,10 +75,21 @@ func TestLoadErrors(t *testing.T) {
 		"empty path":      "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\"}}\nheaders: {h: {db: c, path: \"\"}}",
 		"no ip sources":   "databases: {c: {source: \"https://e/x\"}}\nheaders: {h: {db: c, path: p}}",
 		"bad duration":    "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\", check_interval: soon}}\nheaders: {h: {db: c, path: p}}",
+		"zero duration":   "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\", check_interval: 0s}}\nheaders: {h: {db: c, path: p}}",
 	}
 	for name, body := range cases {
 		if _, err := Load(write(t, body)); err == nil {
 			t.Errorf("%s: expected error, got nil", name)
 		}
+	}
+}
+
+func TestOverwriteFalse(t *testing.T) {
+	cfg, err := Load(write(t, valid+"\noverwrite: false\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OverwriteEnabled() {
+		t.Error("overwrite: false must disable overwrite")
 	}
 }

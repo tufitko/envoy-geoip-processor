@@ -24,6 +24,9 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 	if err != nil {
 		return fmt.Errorf("invalid duration %q: %w", s, err)
 	}
+	if parsed <= 0 {
+		return fmt.Errorf("duration must be positive, got %q", s)
+	}
 	*d = Duration(parsed)
 	return nil
 }
