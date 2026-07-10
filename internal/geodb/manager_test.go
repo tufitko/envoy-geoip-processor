@@ -72,7 +72,7 @@ func TestManagerUpdateAndLookup(t *testing.T) {
 	if m.Ready() {
 		t.Fatal("must not be ready before load")
 	}
-	m.checkAll(context.Background())
+	m.CheckNow(context.Background())
 	if !m.Ready() {
 		t.Fatal("must be ready after successful fetch")
 	}
@@ -97,8 +97,8 @@ func TestManagerKeepsOldOnBadDownload(t *testing.T) {
 		},
 	}}
 	m := newTestManager(t, dir, f)
-	m.checkAll(context.Background())
-	m.checkAll(context.Background()) // корявый файл — reader должен остаться старым
+	m.CheckNow(context.Background())
+	m.CheckNow(context.Background()) // корявый файл — reader должен остаться старым
 	path, _ := ParsePath("country.iso_code")
 	got, found, err := m.Lookup("city", netip.MustParseAddr("2.125.160.216"), path)
 	if err != nil || !found || got != "GB" {
@@ -121,7 +121,7 @@ func TestManagerConcurrentLookupDuringSwap(t *testing.T) {
 	swap := func(dst string) (bool, Meta, error) { copyTestDB(t, dst); return true, Meta{}, nil }
 	f := &scriptedFetcher{steps: []func(string) (bool, Meta, error){swap, swap, swap, swap, swap}}
 	m := newTestManager(t, dir, f)
-	m.checkAll(context.Background())
+	m.CheckNow(context.Background())
 	path, _ := ParsePath("country.iso_code")
 	var wg sync.WaitGroup
 	for range 4 {
@@ -134,7 +134,7 @@ func TestManagerConcurrentLookupDuringSwap(t *testing.T) {
 		}()
 	}
 	for range 4 {
-		m.checkAll(context.Background())
+		m.CheckNow(context.Background())
 	}
 	wg.Wait()
 }

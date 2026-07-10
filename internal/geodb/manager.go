@@ -117,9 +117,9 @@ func (m *Manager) Run(ctx context.Context) {
 	}
 }
 
-// checkAll runs one synchronous check for every database (used by tests
-// and the initial foreground load).
-func (m *Manager) checkAll(ctx context.Context) {
+// CheckNow runs one synchronous update check for every database.
+// Used at startup (foreground initial load) and in tests.
+func (m *Manager) CheckNow(ctx context.Context) {
 	for _, s := range m.dbs {
 		m.checkOne(ctx, s)
 	}
