@@ -1,0 +1,63 @@
+# EnvoyProxy customizes the generated proxy Deployment: a strategic-merge
+# patch appends the geoip-processor sidecar and its volumes. Attach it to a
+# Gateway via spec.infrastructure.parametersRef (see gateway.yaml).
+#
+# The EnvoyProxy resource lives in the Gateway's namespace; the ConfigMap and
+# Secret it mounts live in the proxy pods' namespace (envoy-gateway-system).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: geoip-sidecar
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: geoip-processor
+                      image: geoip-processor:latest # replace with your registry image
+                      args: ["-config", "/etc/geoip/config.yaml"]
+                      env:
+                        - name: MAXMIND_LICENSE # "account_id:license_key"
+                          valueFrom:
+                            secretKeyRef:
+                              name: maxmind
+                              key: license
+                      ports:
+                        - name: grpc
+                          containerPort: 9000
+                        - name: geoip-admin
+                          containerPort: 9902
+                      readinessProbe:
+                        httpGet:
+                          path: /readyz
+                          port: 9902
+                      livenessProbe:
+                        httpGet:
+                          path: /healthz
+                          port: 9902
+                      resources:
+                        requests:
+                          cpu: 100m
+                          memory: 128Mi
+                        limits:
+                          memory: 512Mi
+                      volumeMounts:
+                        - name: geoip-config
+                          mountPath: /etc/geoip
+                          readOnly: true
+                        - name: geoip-cache
+                          mountPath: /var/cache/geoip
+                  volumes:
+                    - name: geoip-config
+                      configMap:
+                        name: geoip-processor-config
+                    - name: geoip-cache
+                      emptyDir: {}

@@ -1,0 +1,48 @@
+# Config for the geoip-processor sidecar. Must live in the namespace where
+# the Envoy proxy pods run (envoy-gateway-system by default), because the
+# sidecar mounts it as a volume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geoip-processor-config
+  namespace: envoy-gateway-system
+data:
+  config.yaml: |
+    listen:
+      grpc: :9000
+      # Not :8080 — listener ports above 1024 map 1:1 to proxy containerPorts,
+      # so a Gateway listener on 8080 would collide with the sidecar.
+      admin: :9902
+
+    cache_dir: /var/cache/geoip
+
+    ip_sources:
+      - header: x-real-ip
+      - header: x-forwarded-for
+      - envoy: source_address
+
+    databases:
+      city:
+        source: https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz
+        auth:
+          basic_env: MAXMIND_LICENSE
+        check_interval: 6h
+        required: true
+      asn:
+        source: https://download.maxmind.com/geoip/databases/GeoLite2-ASN/download?suffix=tar.gz
+        auth:
+          basic_env: MAXMIND_LICENSE
+        check_interval: 6h
+
+    headers:
+      x-geoip-country-code: {db: city, path: country.iso_code}
+      x-geoip-country-name: {db: city, path: country.names.en}
+      x-geoip-region:       {db: city, path: subdivisions.0.iso_code}
+      x-geoip-region-name:  {db: city, path: subdivisions.0.names.en}
+      x-geoip-city:         {db: city, path: city.names.en}
+      x-geoip-latitude:     {db: city, path: location.latitude}
+      x-geoip-longitude:    {db: city, path: location.longitude}
+      x-geoip-postal-code:  {db: city, path: postal.code}
+      x-geoip-timezone:     {db: city, path: location.time_zone}
+      x-geoip-asn:          {db: asn, path: autonomous_system_number}
+      x-geoip-org:          {db: asn, path: autonomous_system_organization}

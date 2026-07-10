@@ -1,0 +1,68 @@
+# Wires the ext_proc filter to the sidecar over localhost. Two patches:
+#   1. a STATIC cluster pointing at 127.0.0.1:9000 (the sidecar's gRPC port);
+#   2. the ext_proc HTTP filter inserted at the front of the HCM filter chain.
+#
+# Requires `extensionApis.enableEnvoyPatchPolicy: true` in the EnvoyGateway
+# config (see README.md). Listener names are formed as
+# <gateway-namespace>/<gateway-name>/<listener-name> — adjust to your Gateway.
+#
+# NOTE: EnvoyPatchPolicy patches raw xDS and is explicitly an unstable API —
+# re-verify after Envoy Gateway upgrades. Prefer the EnvoyExtensionPolicy +
+# separate Deployment setup (see charts/) unless you specifically need the
+# sidecar topology.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: geoip-ext-proc
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: eg
+  type: JSONPatch
+  jsonPatches:
+    # 1. Cluster for the sidecar: same pod, plain HTTP/2 gRPC to localhost.
+    - type: "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+      name: geoip-ext-proc
+      operation:
+        op: add
+        path: ""
+        value:
+          name: geoip-ext-proc
+          type: STATIC
+          connect_timeout: 0.25s
+          typed_extension_protocol_options:
+            envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+              "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+              explicit_http_config:
+                http2_protocol_options: {}
+          load_assignment:
+            cluster_name: geoip-ext-proc
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: 127.0.0.1
+                          port_value: 9000
+    # 2. ext_proc filter at the front of the HTTP filter chain (before router).
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: default/eg/http
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/http_filters/0"
+        value:
+          name: envoy.filters.http.ext_proc
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+            failure_mode_allow: true
+            message_timeout: 0.2s
+            processing_mode:
+              request_header_mode: SEND
+              response_header_mode: SKIP
+            request_attributes:
+              - source.address
+            grpc_service:
+              envoy_grpc:
+                cluster_name: geoip-ext-proc

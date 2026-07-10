@@ -261,6 +261,13 @@ attribute — was only added to `EnvoyExtensionPolicy` in that release. On an ol
 drop `envoy: source_address` from `ip_sources` (and the `requestAttributes` entry) and rely solely
 on header-based IP sources (`x-real-ip`, `x-forwarded-for`, ...).
 
+## Deploy (sidecar + EnvoyPatchPolicy)
+
+Alternative topology: run the processor as a **sidecar inside the Envoy proxy pods** and wire the
+`ext_proc` filter to `127.0.0.1` with an `EnvoyPatchPolicy` — no separate Deployment and no extra
+network hop, at the cost of relying on the (explicitly unstable) xDS-patching API. Full manifests
+and a walkthrough live in [`deploy/envoy-gateway-sidecar/`](deploy/envoy-gateway-sidecar/README.md).
+
 ## Metrics
 
 Exposed via Prometheus text format at `GET /metrics` on the admin listener (default `:8080`),
