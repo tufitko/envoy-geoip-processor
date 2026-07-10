@@ -73,7 +73,7 @@ func run(configPath string, logger *slog.Logger) error {
 		return err
 	}
 	mgr.LoadCache()
-	go mgr.Run(ctx) // первая проверка каждой базы выполняется сразу внутри Run
+	go mgr.Run(ctx) // Run checks every database immediately on start
 
 	processor, err := extproc.New(cfg, mgr, ipsrc.New(cfg.IPSources), logger, reg)
 	if err != nil {

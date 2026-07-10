@@ -9,12 +9,12 @@ resources:
   requests: {cpu: 100m, memory: 128Mi}
   limits: {memory: 512Mi}
 
-# Env для кредов (например MAXMIND_LICENSE из секрета)
+# Env for credentials (e.g. MAXMIND_LICENSE from a secret)
 env: []
 #  - name: MAXMIND_LICENSE
 #    valueFrom: {secretKeyRef: {name: maxmind, key: license}}
 
-# Контент /etc/geoip/config.yaml (см. examples/config.yaml в репо)
+# Content of /etc/geoip/config.yaml (see examples/config.yaml in the repo)
 config:
   listen: {grpc: ":9000", admin: ":8080"}
   cache_dir: /var/cache/geoip
@@ -27,12 +27,12 @@ config:
 
 envoyExtensionPolicy:
   enabled: false
-  # targetRef целится в Gateway, к которому цепляем процессор
+  # targetRef points at the Gateway the processor attaches to
   targetRef:
     group: gateway.networking.k8s.io
     kind: Gateway
     name: my-gateway
   failOpen: true
   messageTimeout: 200ms
-  # Требует Envoy Gateway >= v1.3 (передача атрибутов в ext_proc).
+  # Requires Envoy Gateway >= v1.3 (attribute passing to ext_proc).
   requestAttributes: [source.address]

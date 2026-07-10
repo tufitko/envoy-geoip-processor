@@ -98,7 +98,7 @@ func TestManagerKeepsOldOnBadDownload(t *testing.T) {
 	}}
 	m := newTestManager(t, dir, f)
 	m.CheckNow(context.Background())
-	m.CheckNow(context.Background()) // корявый файл — reader должен остаться старым
+	m.CheckNow(context.Background()) // corrupt file — the old reader must stay in place
 	path, _ := ParsePath("country.iso_code")
 	got, found, err := m.Lookup("city", netip.MustParseAddr("2.125.160.216"), path)
 	if err != nil || !found || got != "GB" {

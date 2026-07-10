@@ -129,7 +129,7 @@ func TestProcessSetsGeoHeaders(t *testing.T) {
 
 func TestProcessDefaultAndRemove(t *testing.T) {
 	client := startProcessor(t, testConfig(t.TempDir()))
-	// IP не из базы: country получает default, city не ставится и попадает в remove (антиспуфинг).
+	// IP absent from the database: country gets its default, city is not set and lands in remove (anti-spoofing).
 	resp := roundTrip(t, client, headersReq(map[string]string{
 		"x-real-ip":    "203.0.113.5",
 		"x-geoip-city": "Spoofed",
@@ -171,7 +171,7 @@ func TestProcessNoIPFailsOpen(t *testing.T) {
 		t.Fatal("must still answer with a RequestHeaders response")
 	}
 	got := setHeaders(resp)
-	// Без IP значений нет, но default всё равно применяется.
+	// Without an IP there are no lookup values, but defaults still apply.
 	if got["x-geoip-country-code"] != "XX" {
 		t.Errorf("default must apply without ip: %v", got)
 	}
