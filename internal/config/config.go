@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// dbNameRE restricts database map keys to characters safe to use verbatim
+// as a cache filename component (see dbPath/metaPath in internal/geodb).
+var dbNameRE = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
 // Duration is a time.Duration that unmarshals from YAML strings like "6h".
 type Duration time.Duration
@@ -86,11 +91,41 @@ func Load(path string) (*Config, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	if err := cfg.checkDuplicateKeys(); err != nil {
+		return nil, fmt.Errorf("validate %s: %w", path, err)
+	}
 	cfg.applyDefaults()
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	return &cfg, nil
+}
+
+// checkDuplicateKeys catches header names and ip_sources header values that
+// collide only once lowercased, before applyDefaults silently folds them
+// together (map key last-write-wins for c.Headers). Run before applyDefaults
+// so the original casing is available for the error message.
+func (c *Config) checkDuplicateKeys() error {
+	seenHeaders := map[string]string{}
+	for name := range c.Headers {
+		lower := strings.ToLower(name)
+		if prev, ok := seenHeaders[lower]; ok && prev != name {
+			return fmt.Errorf("headers: %q and %q collide once lowercased", prev, name)
+		}
+		seenHeaders[lower] = name
+	}
+	seenSources := map[string]string{}
+	for _, s := range c.IPSources {
+		if s.Header == "" {
+			continue
+		}
+		lower := strings.ToLower(s.Header)
+		if prev, ok := seenSources[lower]; ok && prev != s.Header {
+			return fmt.Errorf("ip_sources: %q and %q collide once lowercased", prev, s.Header)
+		}
+		seenSources[lower] = s.Header
+	}
+	return nil
 }
 
 func (c *Config) applyDefaults() {
@@ -137,6 +172,9 @@ func (c *Config) validate() error {
 		return fmt.Errorf("databases must not be empty")
 	}
 	for name, db := range c.Databases {
+		if !dbNameRE.MatchString(name) {
+			return fmt.Errorf("database name %q: must match [a-z0-9_-]+ (it is used as a cache filename)", name)
+		}
 		u, err := url.Parse(db.Source)
 		if err != nil {
 			return fmt.Errorf("database %s: bad source: %w", name, err)

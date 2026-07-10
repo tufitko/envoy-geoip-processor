@@ -145,3 +145,24 @@ func TestManagerUnknownDB(t *testing.T) {
 		t.Error("expected error for unknown db")
 	}
 }
+
+// deadlineFetcher records whether the ctx passed to Fetch carries a
+// deadline, proving checkOne bounds the download instead of handing the
+// fetcher a process-lifetime context that a hung origin could ride forever.
+type deadlineFetcher struct {
+	sawDeadline bool
+}
+
+func (f *deadlineFetcher) Fetch(ctx context.Context, dst string, prev Meta) (bool, Meta, error) {
+	_, f.sawDeadline = ctx.Deadline()
+	return false, prev, nil
+}
+
+func TestCheckOnePassesFetchWithDeadline(t *testing.T) {
+	f := &deadlineFetcher{}
+	m := newTestManager(t, t.TempDir(), f)
+	m.CheckNow(context.Background())
+	if !f.sawDeadline {
+		t.Error("expected Fetch to observe a ctx deadline (fetchTimeout not wired into checkOne)")
+	}
+}

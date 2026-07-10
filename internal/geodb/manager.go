@@ -22,22 +22,27 @@ import (
 // lookups holding the old pointer can finish (lookups are microseconds).
 const closeGrace = time.Minute
 
+// fetchTimeout bounds a single download attempt so a hung or slow origin
+// can't stall a database's refresh goroutine forever.
+const fetchTimeout = 5 * time.Minute
+
 type dbState struct {
 	name     string
 	required bool
 	interval time.Duration
 	fetcher  Fetcher
 	reader   atomic.Pointer[maxminddb.Reader]
-	meta     Meta // touched only by the update goroutine / checkAll
+	meta     Meta // touched only by the update goroutine / CheckNow
 }
 
 // Manager owns all configured databases: disk cache, refresh, lookups.
 type Manager struct {
-	dbs      map[string]*dbState
-	cacheDir string
-	logger   *slog.Logger
-	updates  *prometheus.CounterVec
-	loadedAt *prometheus.GaugeVec
+	dbs       map[string]*dbState
+	cacheDir  string
+	logger    *slog.Logger
+	updates   *prometheus.CounterVec
+	loadedAt  *prometheus.GaugeVec
+	lastCheck *prometheus.GaugeVec
 }
 
 func NewManager(cfg *config.Config, fetchers map[string]Fetcher, logger *slog.Logger, reg prometheus.Registerer) (*Manager, error) {
@@ -56,8 +61,12 @@ func NewManager(cfg *config.Config, fetchers map[string]Fetcher, logger *slog.Lo
 			Name: "geoip_db_loaded_timestamp_seconds",
 			Help: "Unix time the database reader was last (re)loaded.",
 		}, []string{"db"}),
+		lastCheck: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "geoip_db_last_check_timestamp_seconds",
+			Help: "Unix time of the last completed update check.",
+		}, []string{"db"}),
 	}
-	reg.MustRegister(m.updates, m.loadedAt)
+	reg.MustRegister(m.updates, m.loadedAt, m.lastCheck)
 	for name, db := range cfg.Databases {
 		f, ok := fetchers[name]
 		if !ok {
@@ -126,8 +135,12 @@ func (m *Manager) CheckNow(ctx context.Context) {
 }
 
 func (m *Manager) checkOne(ctx context.Context, s *dbState) {
+	defer m.lastCheck.WithLabelValues(s.name).SetToCurrentTime()
+
 	tmp := m.dbPath(s.name) + ".tmp"
-	changed, next, err := s.fetcher.Fetch(ctx, tmp, s.meta)
+	fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	defer cancel()
+	changed, next, err := s.fetcher.Fetch(fetchCtx, tmp, s.meta)
 	if err != nil {
 		m.updates.WithLabelValues(s.name, "error").Inc()
 		m.logger.Error("database check failed", "db", s.name, "err", err)

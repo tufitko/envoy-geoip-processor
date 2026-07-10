@@ -50,7 +50,7 @@ func New(cfg *config.Config, mgr *geodb.Manager, resolver *ipsrc.Resolver, logge
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "geoip_requests_total",
 			Help: "Processed request-header messages by ip resolution result.",
-		}, []string{"ip"}),
+		}, []string{"result"}),
 	}
 	reg.MustRegister(p.lookups, p.requests)
 	for name, rule := range cfg.Headers {

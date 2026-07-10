@@ -104,7 +104,7 @@ All fields, from `internal/config/config.go`:
 | `listen.grpc` | string | `:9000` | `ext_proc` gRPC listener address |
 | `listen.admin` | string | `:8080` | HTTP listener for `/healthz`, `/readyz`, `/metrics` |
 | `cache_dir` | string | `/var/cache/geoip` | Directory for cached `<db>.mmdb` + `<db>.meta.json` files |
-| `ip_sources` | list of `{header}` or `{envoy}` | — | **Required**, non-empty. Ordered client-IP resolution chain. `header: <name>` reads a lowercased request header (comma-separated value → first element used); `envoy: source_address` reads the downstream connection attribute (needs Envoy Gateway ≥ v1.3, see below). Exactly one of `header`/`envoy` per entry. |
+| `ip_sources` | list of `{header}` or `{envoy}` | — | **Required**, non-empty. Ordered client-IP resolution chain. `header: <name>` reads a lowercased request header (comma-separated value → first element used); `envoy: source_address` reads the downstream connection attribute (needs Envoy Gateway ≥ v1.3, see below). Exactly one of `header`/`envoy` per entry. See [Security note](#security-note-on-ip_sources) below. |
 | `overwrite` | bool | `true` | `true`: geoip headers always replace/are added (`OVERWRITE_IF_EXISTS_OR_ADD`), and an unresolvable header is actively removed if the client sent one (anti-spoofing). `false`: only added if absent (`ADD_IF_ABSENT`); a client-sent header is left untouched. |
 | `databases.<name>.source` | string | — | **Required**. `https://…`, `http://…`, or `s3://bucket/key`. `s3://` uses the default AWS credential chain (env vars, IRSA, shared config). |
 | `databases.<name>.auth.basic_env` | string | — | Name of an env var holding `user:password` for HTTP Basic auth on `source` (e.g. `MAXMIND_LICENSE`, see below). Ignored for `s3://`. |
@@ -158,6 +158,16 @@ databases:
 `MAXMIND_LICENSE` must be set to `account_id:license_key` (a MaxMind account ID and license key,
 colon-separated) — the same credential pair used with `geoipupdate`. It is sent as the HTTP Basic
 auth header on every request to `source`.
+
+### Security note on `ip_sources`
+
+Header-based `ip_sources` entries are client-controlled unless a trusted edge proxy sets or strips
+them before the request reaches Envoy. Only list headers your edge proxy actually sanitizes
+(overwrites or removes on the way in) — never a header an end client can set directly. In
+particular, the leftmost value of `x-forwarded-for` is spoofable by the client itself unless your
+edge is guaranteed to be the first hop to append to (or replace) that header. Where Envoy is the
+internet-facing edge, prefer `envoy: source_address`, which reads the actual TCP connection's
+address rather than trusting any header.
 
 ## Fail-open behavior and readiness
 
@@ -258,8 +268,9 @@ alongside the standard Go/process collectors:
 |---|---|---|---|
 | `geoip_db_update_total` | counter | `db`, `result` | Database refresh attempts. `result` ∈ `updated`, `unchanged`, `invalid` (downloaded file failed to open as mmdb), `error` (fetch/rename failure). |
 | `geoip_db_loaded_timestamp_seconds` | gauge | `db` | Unix time the database reader was last (re)loaded — from cache at startup and on every successful refresh. |
+| `geoip_db_last_check_timestamp_seconds` | gauge | `db` | Unix time of the last completed update check, regardless of outcome (updated, unchanged, invalid, or error) — useful for alerting on a refresh loop that's stopped running. |
 | `geoip_lookups_total` | counter | `db`, `result` | Per-header-rule lookup outcomes. `result` ∈ `hit`, `miss` (IP or path not found), `error`. |
-| `geoip_requests_total` | counter | `ip` | Processed request-header messages by IP resolution outcome. `ip` ∈ `found`, `not_found`. |
+| `geoip_requests_total` | counter | `result` | Processed request-header messages by IP resolution outcome. `result` ∈ `found`, `not_found`. |
 
 Health/readiness endpoints on the same listener:
 

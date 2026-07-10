@@ -76,6 +76,8 @@ func TestLoadErrors(t *testing.T) {
 		"no ip sources":   "databases: {c: {source: \"https://e/x\"}}\nheaders: {h: {db: c, path: p}}",
 		"bad duration":    "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\", check_interval: soon}}\nheaders: {h: {db: c, path: p}}",
 		"zero duration":   "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\", check_interval: 0s}}\nheaders: {h: {db: c, path: p}}",
+		"bad db name":     "ip_sources: [{header: x}]\ndatabases: {\"../evil\": {source: \"https://e/x\"}}\nheaders: {h: {db: \"../evil\", path: p}}",
+		"dup header case": "ip_sources: [{header: x}]\ndatabases: {c: {source: \"https://e/x\"}}\nheaders: {X-Foo: {db: c, path: p}, x-foo: {db: c, path: p}}",
 	}
 	for name, body := range cases {
 		if _, err := Load(write(t, body)); err == nil {
